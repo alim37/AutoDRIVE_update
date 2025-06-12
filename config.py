@@ -41,12 +41,16 @@ from attrdict import AttrDict # Mapping objects that allow their elements to be 
 # ROS 2 publishers and subscribers
 pub_sub_dict = AttrDict({
     'subscribers': [
-        # Vehicle data subscribers
+        # Vehicle 2 data subscribers
         {'topic':'/autodrive/f1tenth_1/throttle_command', 'type': Float32, 'name': 'sub_throttle_command'},
-        {'topic':'/autodrive/f1tenth_1/steering_command', 'type': Float32, 'name': 'sub_steering_command'}
+        {'topic':'/autodrive/f1tenth_1/steering_command', 'type': Float32, 'name': 'sub_steering_command'},
+
+        # Vehicle 2 data subscribers
+        {'topic': '/autodrive/f1tenth_2/throttle_command', 'type': Float32, 'name': 'sub_throttle_command_2'},
+        {'topic': '/autodrive/f1tenth_2/steering_command', 'type': Float32, 'name': 'sub_steering_command_2'}
     ],
     'publishers': [
-        # Vehicle data publishers
+        # Vehicle 1 data publishers
         {'topic': '/autodrive/f1tenth_1/throttle', 'type': Float32, 'name': 'pub_throttle'},
         {'topic': '/autodrive/f1tenth_1/steering', 'type': Float32, 'name': 'pub_steering'},
         {'topic': '/autodrive/f1tenth_1/left_encoder', 'type': JointState, 'name': 'pub_left_encoder'},
@@ -55,6 +59,16 @@ pub_sub_dict = AttrDict({
         {'topic': '/autodrive/f1tenth_1/imu', 'type': Imu, 'name': 'pub_imu'},
         {'topic': '/autodrive/f1tenth_1/lidar', 'type': LaserScan, 'name': 'pub_lidar'},
         {'topic': '/autodrive/f1tenth_1/front_camera', 'type': Image, 'name': 'pub_front_camera'},
+
+        # Vehicle 2 data publishers
+        {'topic': '/autodrive/f1tenth_2/throttle', 'type': Float32, 'name': 'pub_throttle_2'},
+        {'topic': '/autodrive/f1tenth_2/steering', 'type': Float32, 'name': 'pub_steering_2'},
+        {'topic': '/autodrive/f1tenth_2/left_encoder', 'type': JointState, 'name': 'pub_left_encoder_2'},
+        {'topic': '/autodrive/f1tenth_2/right_encoder', 'type': JointState, 'name': 'pub_right_encoder_2'},
+        {'topic': '/autodrive/f1tenth_2/ips', 'type': Point, 'name': 'pub_ips_2'},
+        {'topic': '/autodrive/f1tenth_2/imu', 'type': Imu, 'name': 'pub_imu_2'},
+        {'topic': '/autodrive/f1tenth_2/lidar', 'type': LaserScan, 'name': 'pub_lidar_2'},
+        {'topic': '/autodrive/f1tenth_2/front_camera', 'type': Image, 'name': 'pub_front_camera_2'},
     ]
 })
 
@@ -63,3 +77,6 @@ pub_sub_dict = AttrDict({
 # Initialize vehicle control commands
 throttle_command = 0.0 # [-1, 1]
 steering_command = 0.0 # [-1, 1]
+
+throttle_command2 = 0.0
+steering_command2 = 0.0
