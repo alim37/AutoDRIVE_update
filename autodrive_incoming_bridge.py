@@ -181,6 +181,28 @@ def publish_lidar_scan(lidar_scan_rate, lidar_range_array, lidar_intensity_array
 def publish_camera_images(front_camera_image):
     publishers['pub_front_camera'].publish(create_image_msg(front_camera_image, "front_camera"))
 
+# V2
+
+def publish_actuator_feedbacks_v2(throttle, steering):
+    publishers['pub_throttle_2'].publish(create_float_msg(throttle))
+    publishers['pub_steering_2'].publish(create_float_msg(steering))
+
+def publish_encoder_data_v2(encoder_angles):
+    publishers['pub_left_encoder_2'].publish(create_joint_state_msg(encoder_angles[0], "left_encoder_2", "left_encoder_2"))
+    publishers['pub_right_encoder_2'].publish(create_joint_state_msg(encoder_angles[1], "right_encoder_2", "right_encoder_2"))
+
+def publish_ips_data_v2(position):
+    publishers['pub_ips_2'].publish(create_point_msg(position))
+
+def publish_imu_data_v2(orientation_q, angular_velocity, linear_acceleration):
+    publishers['pub_imu_2'].publish(create_imu_msg(orientation_q, angular_velocity, linear_acceleration))
+
+def publish_lidar_scan_v2(rate, ranges, intensities):
+    publishers['pub_lidar_2'].publish(create_laser_scan_msg(rate, ranges.tolist(), intensities.tolist()))
+
+def publish_camera_images_v2(image_array):
+    publishers['pub_front_camera_2'].publish(create_image_msg(image_array, "front_camera_2"))
+
 #########################################################
 # WEBSOCKET SERVER INFRASTRUCTURE
 #########################################################
@@ -266,7 +288,7 @@ def bridge(sid, data):
 
         throttle2 = float(data["V2 Throttle"])
         steering2 = float(data["V2 Steering"])
-        publish_actuator_feedbacks(throttle2, steering2)
+        publish_actuator_feedbacks_2(throttle2, steering2)
         
         encoder_angles2 = np.fromstring(data["V2 Encoder Angles"], dtype=float, sep=' ')
         publish_encoder_data(encoder_angles2)
