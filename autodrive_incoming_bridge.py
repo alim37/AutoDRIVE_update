@@ -56,9 +56,14 @@ import autodrive_f1tenth.config as config # AutoDRIVE Ecosystem ROS 2 configurat
 global autodrive_incoming_bridge, cv_bridge, publishers
 global throttle_command, steering_command
 
+global throttle_command2, steering_command2 # VEHICLE 2
+
 # Initialize vehicle control commands
 throttle_command = config.throttle_command
 steering_command = config.steering_command
+
+throttle_command2 = config.throttle_command2
+steering_command2 = config.steering_command2
 
 #########################################################
 # ROS 2 MESSAGE GENERATING FUNCTIONS
@@ -208,6 +213,9 @@ def bridge(sid, data):
             throttle_command = float(api_config['f1tenth_1']['throttle_command'])
             steering_command = float(api_config['f1tenth_1']['steering_command'])
 
+            throttle_command2 = float(api_config['f1tenth_2']['throttle_command'])
+            steering_command2 = float(api_config['f1tenth_2']['steering_command'])
+
         # Pass if file cannot be read
         except:
             pass
@@ -295,7 +303,12 @@ def bridge(sid, data):
         # CONTROL COMMANDS
         ########################################################################
         # Vehicle and traffic light control commands
-        sio.emit('Bridge', data={'V1 Throttle': str(throttle_command), 'V1 Steering': str(steering_command)})
+        sio.emit('Bridge', data={
+            'V1 Throttle': str(throttle_command), 
+            'V1 Steering': str(steering_command),
+            'V2 Throttle' : str(throttle_command2),
+            'V2 Steering' : str(steering_command2
+        })
 
 #########################################################
 # AUTODRIVE ROS 2 INCOMING BRIDGE INFRASTRUCTURE
