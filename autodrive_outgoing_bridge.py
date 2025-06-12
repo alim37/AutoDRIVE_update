@@ -42,10 +42,14 @@ import autodrive_f1tenth.config as config # AutoDRIVE Ecosystem ROS 2 configurat
 
 # Global declarations
 global throttle_command, steering_command
+global throttle_command2, steering_command2 # V2
 
 # Initialize vehicle control commands
 throttle_command = config.throttle_command
 steering_command = config.steering_command
+
+throttle_command2 = config.throttle_command2
+steering_command2 = config.steering_command2
 
 #########################################################
 # ROS 2 SUBSCRIBER CALLBACKS
@@ -60,6 +64,16 @@ def callback_throttle_command(throttle_command_msg):
 def callback_steering_command(steering_command_msg):
     global steering_command
     steering_command = float(np.round(steering_command_msg.data, 3))
+
+# VEHICLE 2
+
+def callback_throttle_command2(throttle_command_msg):
+    global throttle_command2
+    throttle_command2 = float(np.round(throttle_command_msg.data, 3))
+
+def callback_steering_command2(steering_command_msg):
+    global steering_command2
+    steering_command2 = float(np.round(steering_command_msg.data, 3))
 
 #########################################################
 # AUTODRIVE ROS 2 OUTGOING BRIDGE INFRASTRUCTURE
@@ -80,6 +94,9 @@ def main():
         # Vehicle data subscriber callbacks
         '/autodrive/f1tenth_1/throttle_command': callback_throttle_command,
         '/autodrive/f1tenth_1/steering_command': callback_steering_command,
+
+        '/autodrive/f1tenth_2/throttle_command': callback_throttle_command2,
+        '/autodrive/f1tenth_2/steering_command': callback_steering_command2
     } # Subscriber callback functions
     subscribers = [autodrive_outgoing_bridge.create_subscription(e.type, e.topic, callbacks[e.topic], qos_profile)
                    for e in config.pub_sub_dict.subscribers] # Subscribers
@@ -95,6 +112,10 @@ def main():
         api_config['f1tenth_1'] = {'throttle_command': str(throttle_command),
                                    'steering_command': str(steering_command)
                                    }
+        api_config['f1tenth_2'] = {
+                                    'throttle_command': str(throttle_command2),
+                                    'steering_command': str(steering_command2)
+                                    }
         with open(package_share_directory+'/api_config.ini', 'w') as configfile:
             api_config.write(configfile)
         # Spin the node once
