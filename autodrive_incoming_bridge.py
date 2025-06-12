@@ -250,7 +250,46 @@ def bridge(sid, data):
         publish_lidar_scan(lidar_scan_rate, lidar_range_array, lidar_intensity_array)
         # Cameras
         front_camera_image = np.asarray(Image.open(BytesIO(base64.b64decode(data["V1 Front Camera Image"]))))
-        publish_camera_images(front_camera_image)      
+        publish_camera_images(front_camera_image)   
+
+        ########################################################################
+        # VEHICLE 2 DATA
+        ########################################################################
+
+        throttle2 = float(data["V2 Throttle"])
+        steering2 = float(data["V2 Steering"])
+        publish_actuator_feedbacks(throttle2, steering2)
+        
+        encoder_angles2 = np.fromstring(data["V2 Encoder Angles"], dtype=float, sep=' ')
+        publish_encoder_data(encoder_angles2)
+        
+        position2 = np.fromstring(data["V2 Position"], dtype=float, sep=' ')
+        publish_ips_data(position2)
+
+        orientation_quaternion2 = np.fromstring(data["V2 Orientation Quaternion"], dtype=float, sep=' ')
+        angular_velocity2 = np.fromstring(data["V2 Angular Velocity"], dtype=float, sep=' ')
+        linear_acceleration2 = np.fromstring(data["V2 Linear Acceleration"], dtype=float, sep=' ')
+        publish_imu_data(orientation_quaternion2, angular_velocity2, linear_acceleration2)
+
+        broadcast_transform("f1tenth_2", "map", position2, orientation_quaternion2)
+        broadcast_transform("left_encoder", "f1tenth_2", np.asarray([0.0, 0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles2[0]%6.283, 0.0))
+        broadcast_transform("right_encoder", "f1tenth_2", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles2[1]%6.283, 0.0))
+        broadcast_transform("ips", "f1tenth_2", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
+        broadcast_transform("imu", "f1tenth_2", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
+        broadcast_transform("lidar", "f1tenth_2", np.asarray([0.2733, 0.0, 0.096]), np.asarray([0.0, 0.0, 0.0, 1.0]))
+        broadcast_transform("front_camera", "f1tenth_2", np.asarray([-0.015, 0.0, 0.15]), np.asarray([0, 0.0871557, 0, 0.9961947]))
+        broadcast_transform("front_left_wheel", "f1tenth_2", np.asarray([0.33, 0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering2))/(2*0.141537-2*0.0765*np.tan(steering2)))))
+        broadcast_transform("front_right_wheel", "f1tenth_2", np.asarray([0.33, -0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering2))/(2*0.141537+2*0.0765*np.tan(steering2)))))
+        broadcast_transform("rear_left_wheel", "f1tenth_2", np.asarray([0.0, 0.118, 0.0]), quaternion_from_euler(0.0, encoder_angles2[0]%6.283, 0.0))
+        broadcast_transform("rear_right_wheel", "f1tenth_2", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, encoder_angles2[1]%6.283, 0.0))
+
+        lidar_scan_rate2 = float(data["V2 LIDAR Scan Rate"])
+        lidar_range_array2 = np.fromstring(data["V2 LIDAR Range Array"], dtype=float, sep=' ')
+        lidar_intensity_array2 = np.fromstring(data["V2 LIDAR Intensity Array"], dtype=float, sep=' ')
+        publish_lidar_scan(lidar_scan_rate2, lidar_range_array2, lidar_intensity_array2)
+
+        front_camera_image2 = np.asarray(Image.open(BytesIO(base64.b64decode(data["V2 Front Camera Image"]))))
+        publish_camera_images(front_camera_image2)
 
         ########################################################################
         # CONTROL COMMANDS
