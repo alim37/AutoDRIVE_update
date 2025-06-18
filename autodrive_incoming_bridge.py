@@ -120,6 +120,7 @@ def create_laser_scan_msg(lidar_scan_rate, lidar_range_array, lidar_intensity_ar
     ls.header = Header()
     ls.header.stamp = autodrive_incoming_bridge.get_clock().now().to_msg()
     ls.header.frame_id = frame_id
+    
     ls.angle_min = -2.35619 # Minimum angle of laser scan (-135 degrees)
     ls.angle_max = 2.35619 # Maximum angle of laser scan (135 degrees)
     ls.angle_increment = 0.004363323 # Angular resolution of laser scan (0.25 degree)
