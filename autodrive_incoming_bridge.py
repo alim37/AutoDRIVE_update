@@ -128,6 +128,7 @@ def create_laser_scan_msg(lidar_scan_rate, lidar_range_array, lidar_intensity_ar
     ls.scan_time = ls.time_increment * 1080 # Time required to complete a scan
     ls.range_min = 0.06 # Minimum sensor range (in meters)
     ls.range_max = 10.0 # Maximum sensor range (in meters)
+    
     ls.ranges = lidar_range_array
     ls.intensities = lidar_intensity_array
     return ls
@@ -204,6 +205,7 @@ def publish_imu_data_v2(orientation_q, angular_velocity, linear_acceleration):
     publishers['pub_imu_2'].publish(create_imu_msg(orientation_q, angular_velocity, linear_acceleration, frame_id='imu_2'))
 
 def publish_lidar_scan_v2(rate, ranges, intensities):
+    print("🟢 Attempting to publish V2 LIDAR...")
     try:
         publishers['pub_lidar_2'].publish(create_laser_scan_msg(rate, ranges.tolist(), intensities.tolist(), frame_id='lidar_2'))
     except Exception as e:
@@ -230,6 +232,9 @@ def connect(sid, environ):
 # Registering "Bridge" event handler for the server
 @sio.on('Bridge')
 def bridge(sid, data):
+    print("🔵 Bridge event received")
+    print("🔍 Incoming data keys:", list(data.keys()))
+
     # Global declarations
     global autodrive_incoming_bridge, cv_bridge, publishers
     global throttle_command, steering_command
