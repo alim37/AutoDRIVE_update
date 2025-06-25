@@ -81,15 +81,15 @@ global autodrive_incoming_bridge, cv_bridge, publishers
 global throttle_command, steering_command
 global throttle_command2, steering_command2 # VEHICLE 2
 
-global tf_broadcaster
+global tf_broadcaster # Declare tf_broadcaster as global
 
-global latest_position_1, latest_orientation_1
-global latest_position_2, latest_orientation_2
-
-latest_position_1 = None
-latest_orientation_1 = None
-latest_position_2 = None
-latest_orientation_2 = None
+# Removed latest_position/orientation globals as they are no longer needed
+# if transforms are broadcast immediately from the callback.
+# If you still want to log them or use them for other purposes, you can keep them.
+# latest_position_1 = None
+# latest_orientation_1 = None
+# latest_position_2 = None
+# latest_orientation_2 = None
 
 # Initialize vehicle control commands
 throttle_command = config.throttle_command
@@ -174,38 +174,8 @@ def create_image_msg(image_array, frame_id):
     img.header.frame_id = frame_id
     return img
 
-# def broadcast_transform(child_frame_id, parent_frame_id, position_tf, orientation_tf):
-#     tb = tf2_ros.TransformBroadcaster(autodrive_incoming_bridge)
-#     tf = TransformStamped()
-#     tf.header.stamp = autodrive_incoming_bridge.get_clock().now().to_msg()
-#     tf.header.frame_id = parent_frame_id
-#     tf.child_frame_id = child_frame_id
-#     tf.transform.translation.x = position_tf[0] # Pos X
-#     tf.transform.translation.y = position_tf[1] # Pos Y
-#     tf.transform.translation.z = position_tf[2] # Pos Z
-#     tf.transform.rotation.x = orientation_tf[0] # Quat X
-#     tf.transform.rotation.y = orientation_tf[1] # Quat Y
-#     tf.transform.rotation.z = orientation_tf[2] # Quat Z
-#     tf.transform.rotation.w = orientation_tf[3] # Quat W
-#     tb.sendTransform(tf)
-
-def broadcast_transform(child_frame_id, parent_frame_id, position_tf, orientation_tf):
-    tf = TransformStamped()
-    tf.header.stamp = autodrive_incoming_bridge.get_clock().now().to_msg()
-    tf.header.frame_id = parent_frame_id
-    tf.child_frame_id = child_frame_id
-
-    tf.transform.translation.x = position_tf[0]
-    tf.transform.translation.y = position_tf[1]
-    tf.transform.translation.z = position_tf[2]
-    tf.transform.rotation.x = orientation_tf[0]
-    tf.transform.rotation.y = orientation_tf[1]
-    tf.transform.rotation.z = orientation_tf[2]
-    tf.transform.rotation.w = orientation_tf[3]
-
-    tf_broadcaster.sendTransform(tf)
-
-def broadcast_tf(tf_broadcaster, parent_frame, child_frame, position, orientation, clock):
+# This is the function we'll use for broadcasting transforms
+def broadcast_tf(tf_broadcaster_instance, parent_frame, child_frame, position, orientation, clock):
     t = TransformStamped()
     t.header.stamp = clock.now().to_msg()
     t.header.frame_id = parent_frame
@@ -220,7 +190,7 @@ def broadcast_tf(tf_broadcaster, parent_frame, child_frame, position, orientatio
     t.transform.rotation.z = orientation[2]
     t.transform.rotation.w = orientation[3]
 
-    tf_broadcaster.sendTransform(t)
+    tf_broadcaster_instance.sendTransform(t)
 
 
 #########################################################
@@ -234,14 +204,15 @@ def publish_actuator_feedbacks(throttle, steering):
     publishers['pub_steering'].publish(create_float_msg(steering))
 
 def publish_encoder_data(encoder_angles):
-    publishers['pub_left_encoder'].publish(create_joint_state_msg(encoder_angles[0], "left_encoder", "left_encoder"))
-    publishers['pub_right_encoder'].publish(create_joint_state_msg(encoder_angles[1], "right_encoder", "right_encoder"))
+    # Changed frame_id to be specific to V1
+    publishers['pub_left_encoder'].publish(create_joint_state_msg(encoder_angles[0], "left_encoder_1", "left_encoder_1"))
+    publishers['pub_right_encoder'].publish(create_joint_state_msg(encoder_angles[1], "right_encoder_1", "right_encoder_1"))
 
 def publish_ips_data(position):
     publishers['pub_ips'].publish(create_point_msg(position))
 
 def publish_imu_data(orientation_quaternion, angular_velocity, linear_acceleration):
-    publishers['pub_imu'].publish(create_imu_msg(orientation_quaternion, angular_velocity, linear_acceleration, frame_id='imu'))
+    publishers['pub_imu'].publish(create_imu_msg(orientation_quaternion, angular_velocity, linear_acceleration, frame_id='imu_1'))
 
 def publish_lidar_scan(lidar_scan_rate, lidar_range_array, lidar_intensity_array):
     try:
@@ -263,6 +234,7 @@ def publish_actuator_feedbacks_v2(throttle, steering):
     publishers['pub_steering_2'].publish(create_float_msg(steering))
 
 def publish_encoder_data_v2(encoder_angles):
+    # Changed frame_id to be specific to V2
     publishers['pub_left_encoder_2'].publish(create_joint_state_msg(encoder_angles[0], "left_encoder_2", "left_encoder_2"))
     publishers['pub_right_encoder_2'].publish(create_joint_state_msg(encoder_angles[1], "right_encoder_2", "right_encoder_2"))
 
@@ -273,7 +245,7 @@ def publish_imu_data_v2(orientation_q, angular_velocity, linear_acceleration):
     publishers['pub_imu_2'].publish(create_imu_msg(orientation_q, angular_velocity, linear_acceleration, frame_id='imu_2'))
 
 def publish_lidar_scan_v2(rate, ranges, intensities):
-    print("🟢 Attempting to publish V2 LIDAR...")
+    # print("🟢 Attempting to publish V2 LIDAR...") # Suppressed for cleaner output
     try:
         publishers['pub_lidar_2'].publish(create_laser_scan_msg(rate, ranges.tolist(), intensities.tolist(), frame_id='lidar_2'))
     except Exception as e:
@@ -300,16 +272,16 @@ def connect(sid, environ):
 # Registering "Bridge" event handler for the server
 @sio.on('Bridge')
 def bridge(sid, data):
-    print("🔵 Bridge event received")
-    print("🔍 Incoming data keys:", list(data.keys()))
+    print("🔵 Bridge event received") # Suppressed for cleaner output
+    print("🔍 Incoming data keys:", list(data.keys())) # Suppressed for cleaner output
 
     # Global declarations
     global autodrive_incoming_bridge, cv_bridge, publishers
     global throttle_command, steering_command
     global throttle_command2, steering_command2
 
-    global latest_position_1, latest_orientation_1
-    global latest_position_2, latest_orientation_2
+    # Make tf_broadcaster accessible
+    global tf_broadcaster 
 
     # Get package's shared directory path
     package_share_directory = get_package_share_directory('autodrive_f1tenth')
@@ -343,29 +315,27 @@ def bridge(sid, data):
         
         # IPS
         position = np.fromstring(data["V1 Position"], dtype=float, sep=' ')
-        latest_position_1     = position
         publish_ips_data(position)
         
         # IMU
         orientation_quaternion = np.fromstring(data["V1 Orientation Quaternion"], dtype=float, sep=' ')
-        latest_orientation_1  = orientation_quaternion
-
         angular_velocity = np.fromstring(data["V1 Angular Velocity"], dtype=float, sep=' ')
         linear_acceleration = np.fromstring(data["V1 Linear Acceleration"], dtype=float, sep=' ')
         publish_imu_data(orientation_quaternion, angular_velocity, linear_acceleration)
         
         # Coordinate transforms for Vehicle 1
-        broadcast_transform("f1tenth_1", "map", position, orientation_quaternion)
-        broadcast_transform("left_encoder_1", "f1tenth_1", np.asarray([0.0, 0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles[0]%6.283, 0.0))
-        broadcast_transform("right_encoder_1", "f1tenth_1", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles[1]%6.283, 0.0))
-        broadcast_transform("ips_1", "f1tenth_1", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
-        broadcast_transform("imu_1", "f1tenth_1", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
+        # Broadcast transforms here, as soon as the data arrives
+        broadcast_tf(tf_broadcaster, "map", "f1tenth_1", position, orientation_quaternion, autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_1", "left_encoder_1", np.asarray([0.0, 0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles[0]%6.283, 0.0), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_1", "right_encoder_1", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles[1]%6.283, 0.0), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_1", "ips_1", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_1", "imu_1", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]), autodrive_incoming_bridge.get_clock())
         
-        broadcast_transform("front_camera_1", "f1tenth_1", np.asarray([-0.015, 0.0, 0.15]), np.asarray([0, 0.0871557, 0, 0.9961947]))
-        broadcast_transform("front_left_wheel_1", "f1tenth_1", np.asarray([0.33, 0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering))/(2*0.141537-2*0.0765*np.tan(steering)))))
-        broadcast_transform("front_right_wheel_1", "f1tenth_1", np.asarray([0.33, -0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering))/(2*0.141537+2*0.0765*np.tan(steering)))))
-        broadcast_transform("rear_left_wheel_1", "f1tenth_1", np.asarray([0.0, 0.118, 0.0]), quaternion_from_euler(0.0, encoder_angles[0]%6.283, 0.0))
-        broadcast_transform("rear_right_wheel_1", "f1tenth_1", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, encoder_angles[1]%6.283, 0.0))
+        broadcast_tf(tf_broadcaster, "f1tenth_1", "front_camera_1", np.asarray([-0.015, 0.0, 0.15]), np.asarray([0, 0.0871557, 0, 0.9961947]), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_1", "front_left_wheel_1", np.asarray([0.33, 0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering))/(2*0.141537-2*0.0765*np.tan(steering)))), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_1", "front_right_wheel_1", np.asarray([0.33, -0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering))/(2*0.141537+2*0.0765*np.tan(steering)))), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_1", "rear_left_wheel_1", np.asarray([0.0, 0.118, 0.0]), quaternion_from_euler(0.0, encoder_angles[0]%6.283, 0.0), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_1", "rear_right_wheel_1", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, encoder_angles[1]%6.283, 0.0), autodrive_incoming_bridge.get_clock())
         
         # LIDAR for Vehicle 1
         try:
@@ -384,10 +354,10 @@ def bridge(sid, data):
             if len(lidar_intensity_array) != len(lidar_range_array):
                 lidar_intensity_array = np.ones_like(lidar_range_array)
 
-            print(f"V1 LIDAR: Rate={lidar_scan_rate}, "
-                f"Points={len(lidar_range_array)}, Intensities={len(lidar_intensity_array)}")
+            # print(f"V1 LIDAR: Rate={lidar_scan_rate}, " # Suppressed for cleaner output
+            #     f"Points={len(lidar_range_array)}, Intensities={len(lidar_intensity_array)}")
 
-            broadcast_transform("lidar_1", "f1tenth_1", np.asarray([0.2733, 0.0, 0.096]), np.asarray([0.0, 0.0, 0.0, 1.0]))
+            broadcast_tf(tf_broadcaster, "f1tenth_1", "lidar_1", np.asarray([0.2733, 0.0, 0.096]), np.asarray([0.0, 0.0, 0.0, 1.0]), autodrive_incoming_bridge.get_clock())
             publish_lidar_scan(lidar_scan_rate, lidar_range_array, lidar_intensity_array)
 
         except Exception as e:
@@ -411,29 +381,27 @@ def bridge(sid, data):
         
         # IPS
         position2 = np.fromstring(data["V2 Position"], dtype=float, sep=' ')
-        latest_position_2 = position2
         publish_ips_data_v2(position2)
 
         # IMU
         orientation_quaternion2 = np.fromstring(data["V2 Orientation Quaternion"], dtype=float, sep=' ')
-        latest_orientation_2  = orientation_quaternion2
-
         angular_velocity2 = np.fromstring(data["V2 Angular Velocity"], dtype=float, sep=' ')
         linear_acceleration2 = np.fromstring(data["V2 Linear Acceleration"], dtype=float, sep=' ')
         publish_imu_data_v2(orientation_quaternion2, angular_velocity2, linear_acceleration2)
 
         # Coordinate transforms for Vehicle 2
-        broadcast_transform("f1tenth_2", "map", position2, orientation_quaternion2)
-        broadcast_transform("left_encoder_2", "f1tenth_2", np.asarray([0.0, 0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles2[0]%6.283, 0.0))
-        broadcast_transform("right_encoder_2", "f1tenth_2", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles2[1]%6.283, 0.0))
-        broadcast_transform("ips_2", "f1tenth_2", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
-        broadcast_transform("imu_2", "f1tenth_2", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
+        # Broadcast transforms here, as soon as the data arrives
+        broadcast_tf(tf_broadcaster, "map", "f1tenth_2", position2, orientation_quaternion2, autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_2", "left_encoder_2", np.asarray([0.0, 0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles2[0]%6.283, 0.0), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_2", "right_encoder_2", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles2[1]%6.283, 0.0), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_2", "ips_2", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_2", "imu_2", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]), autodrive_incoming_bridge.get_clock())
         
-        broadcast_transform("front_camera_2", "f1tenth_2", np.asarray([-0.015, 0.0, 0.15]), np.asarray([0, 0.0871557, 0, 0.9961947]))
-        broadcast_transform("front_left_wheel_2", "f1tenth_2", np.asarray([0.33, 0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering2))/(2*0.141537-2*0.0765*np.tan(steering2)))))
-        broadcast_transform("front_right_wheel_2", "f1tenth_2", np.asarray([0.33, -0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering2))/(2*0.141537+2*0.0765*np.tan(steering2)))))
-        broadcast_transform("rear_left_wheel_2", "f1tenth_2", np.asarray([0.0, 0.118, 0.0]), quaternion_from_euler(0.0, encoder_angles2[0]%6.283, 0.0))
-        broadcast_transform("rear_right_wheel_2", "f1tenth_2", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, encoder_angles2[1]%6.283, 0.0))
+        broadcast_tf(tf_broadcaster, "f1tenth_2", "front_camera_2", np.asarray([-0.015, 0.0, 0.15]), np.asarray([0, 0.0871557, 0, 0.9961947]), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_2", "front_left_wheel_2", np.asarray([0.33, 0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering2))/(2*0.141537-2*0.0765*np.tan(steering2)))), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_2", "front_right_wheel_2", np.asarray([0.33, -0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering2))/(2*0.141537+2*0.0765*np.tan(steering2)))), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_2", "rear_left_wheel_2", np.asarray([0.0, 0.118, 0.0]), quaternion_from_euler(0.0, encoder_angles2[0]%6.283, 0.0), autodrive_incoming_bridge.get_clock())
+        broadcast_tf(tf_broadcaster, "f1tenth_2", "rear_right_wheel_2", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, encoder_angles2[1]%6.283, 0.0), autodrive_incoming_bridge.get_clock())
 
         # LIDAR for Vehicle 2
         try:
@@ -449,10 +417,10 @@ def bridge(sid, data):
             if len(lidar_intensity_array2) != len(lidar_range_array2):
                 lidar_intensity_array2 = np.ones_like(lidar_range_array2)
 
-            print(f"V2 LIDAR: Rate={lidar_scan_rate2}, "
-                f"Points={len(lidar_range_array2)}, Intensities={len(lidar_intensity_array2)}")
+            # print(f"V2 LIDAR: Rate={lidar_scan_rate2}, " # Suppressed for cleaner output
+            #     f"Points={len(lidar_range_array2)}, Intensities={len(lidar_intensity_array2)}")
 
-            broadcast_transform("lidar_2", "f1tenth_2", np.asarray([0.2733, 0.0, 0.096]), np.asarray([0.0, 0.0, 0.0, 1.0]))
+            broadcast_tf(tf_broadcaster, "f1tenth_2", "lidar_2", np.asarray([0.2733, 0.0, 0.096]), np.asarray([0.0, 0.0, 0.0, 1.0]), autodrive_incoming_bridge.get_clock())
             publish_lidar_scan_v2(lidar_scan_rate2, lidar_range_array2, lidar_intensity_array2)
 
         except Exception as e:
@@ -467,7 +435,7 @@ def bridge(sid, data):
         # CONTROL COMMANDS
         ########################################################################
         # Vehicle control commands
-        print(f"EMIT: V1 → T:{throttle_command}, S:{steering_command} | V2 → T:{throttle_command2}, S:{steering_command2}")
+        # print(f"EMIT: V1 → T:{throttle_command}, S:{steering_command} | V2 → T:{throttle_command2}, S:{steering_command2}") # Suppressed for cleaner output
 
         sio.emit('Bridge', data={
             'V1 Throttle': str(throttle_command if throttle_command is not None else 0.0),
@@ -484,13 +452,12 @@ def main():
     # Global declarations
     global autodrive_incoming_bridge, cv_bridge, publishers
     global throttle_command, steering_command
-    global tf_broadcaster
+    global tf_broadcaster # Ensure tf_broadcaster is set globally here
 
     # ROS 2 infrastructure
     rclpy.init() # Initialize ROS 2 communication for this context
     autodrive_incoming_bridge = rclpy.create_node('autodrive_incoming_bridge') # Create ROS 2 node
 
-    ##global broadcaster
     tf_broadcaster = tf2_ros.TransformBroadcaster(autodrive_incoming_bridge)
 
 
@@ -516,18 +483,14 @@ def main():
     
     # Recursive operations while node is alive
     while rclpy.ok():
-        rclpy.spin_once(autodrive_incoming_bridge, timeout_sec=0.01) # Spin the node once with timeout
-        # Re-broadcast TF every loop to keep RViz happy
+        # Spin the node once with timeout to process any pending ROS 2 callbacks
+        # (e.g., if you had subscribers in this node for control commands from other ROS nodes)
+        rclpy.spin_once(autodrive_incoming_bridge, timeout_sec=0.01) 
 
-        if latest_position_1 is not None and latest_orientation_1 is not None:
-            print(f"[DBG] V1 pose {latest_position_1[:2]} "f"θ={latest_orientation_1[2]:.3f}")
-            #broadcast_transform("f1tenth_1", "map", latest_position_1, latest_orientation_1)
-            broadcast_tf(tf_broadcaster, "map", "f1tenth_1/base_link", latest_position_1, latest_orientation_1, autodrive_incoming_bridge.get_clock())
-        if latest_position_2 is not None and latest_orientation_2 is not None:
-            print(f"[DBG] V2 pose {latest_position_2[:2]} "f"θ={latest_orientation_2[2]:.3f}")
-            #broadcast_transform("f1tenth_2", "map", latest_position_2, latest_orientation_2)
-            broadcast_tf(tf_broadcaster, "map", "f1tenth_2/base_link", latest_position_2, latest_orientation_2, autodrive_incoming_bridge.get_clock())
-
+        # Removed the re-broadcast TF logic from here.
+        # Transforms are now broadcast directly in the `bridge` callback
+        # when new data arrives from the simulator.
+        # This makes the TF updates synchronous with the incoming simulation data.
     
     autodrive_incoming_bridge.destroy_node() # Explicitly destroy the node
     rclpy.shutdown() # Shutdown this context
