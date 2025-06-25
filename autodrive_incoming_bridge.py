@@ -50,12 +50,46 @@ from PIL import Image # Python Imaging Library's (PIL's) Image module
 import configparser # Parsing shared configuration file(s)
 import autodrive_f1tenth.config_2 as config # AutoDRIVE Ecosystem ROS 2 configuration for F1TENTH vehicle
 
+import gzip
+
+def decompress_lidar_data(compressed_str: str) -> np.ndarray:
+    """
+    Decompress a LIDAR string compressed with Unity's DataCompressor.CompressArray().
+    It's a GZip-compressed base64-encoded float string.
+    Returns a NumPy float array.
+    """
+    try:
+        # Decode from base64
+        decoded = base64.b64decode(compressed_str)
+
+        # Decompress from GZip
+        decompressed = gzip.decompress(decoded).decode('ascii')
+
+        # Replace commas with spaces (if needed)
+        decompressed = decompressed.replace(",", " ")
+
+        # Convert to NumPy array
+        return np.fromstring(decompressed.strip(), dtype=float, sep=' ')
+    except Exception as e:
+        print(f"❌ Failed to decompress LIDAR data: {e}")
+        return np.array([], dtype=float)
+
 ################################################################################
 
 # Global declarations
 global autodrive_incoming_bridge, cv_bridge, publishers
 global throttle_command, steering_command
 global throttle_command2, steering_command2 # VEHICLE 2
+
+global tf_broadcaster
+
+global latest_position_1, latest_orientation_1
+global latest_position_2, latest_orientation_2
+
+latest_position_1 = None
+latest_orientation_1 = None
+latest_position_2 = None
+latest_orientation_2 = None
 
 # Initialize vehicle control commands
 throttle_command = config.throttle_command
@@ -140,20 +174,54 @@ def create_image_msg(image_array, frame_id):
     img.header.frame_id = frame_id
     return img
 
+# def broadcast_transform(child_frame_id, parent_frame_id, position_tf, orientation_tf):
+#     tb = tf2_ros.TransformBroadcaster(autodrive_incoming_bridge)
+#     tf = TransformStamped()
+#     tf.header.stamp = autodrive_incoming_bridge.get_clock().now().to_msg()
+#     tf.header.frame_id = parent_frame_id
+#     tf.child_frame_id = child_frame_id
+#     tf.transform.translation.x = position_tf[0] # Pos X
+#     tf.transform.translation.y = position_tf[1] # Pos Y
+#     tf.transform.translation.z = position_tf[2] # Pos Z
+#     tf.transform.rotation.x = orientation_tf[0] # Quat X
+#     tf.transform.rotation.y = orientation_tf[1] # Quat Y
+#     tf.transform.rotation.z = orientation_tf[2] # Quat Z
+#     tf.transform.rotation.w = orientation_tf[3] # Quat W
+#     tb.sendTransform(tf)
+
 def broadcast_transform(child_frame_id, parent_frame_id, position_tf, orientation_tf):
-    tb = tf2_ros.TransformBroadcaster(autodrive_incoming_bridge)
     tf = TransformStamped()
     tf.header.stamp = autodrive_incoming_bridge.get_clock().now().to_msg()
     tf.header.frame_id = parent_frame_id
     tf.child_frame_id = child_frame_id
-    tf.transform.translation.x = position_tf[0] # Pos X
-    tf.transform.translation.y = position_tf[1] # Pos Y
-    tf.transform.translation.z = position_tf[2] # Pos Z
-    tf.transform.rotation.x = orientation_tf[0] # Quat X
-    tf.transform.rotation.y = orientation_tf[1] # Quat Y
-    tf.transform.rotation.z = orientation_tf[2] # Quat Z
-    tf.transform.rotation.w = orientation_tf[3] # Quat W
-    tb.sendTransform(tf)
+
+    tf.transform.translation.x = position_tf[0]
+    tf.transform.translation.y = position_tf[1]
+    tf.transform.translation.z = position_tf[2]
+    tf.transform.rotation.x = orientation_tf[0]
+    tf.transform.rotation.y = orientation_tf[1]
+    tf.transform.rotation.z = orientation_tf[2]
+    tf.transform.rotation.w = orientation_tf[3]
+
+    tf_broadcaster.sendTransform(tf)
+
+def broadcast_tf(tf_broadcaster, parent_frame, child_frame, position, orientation, clock):
+    t = TransformStamped()
+    t.header.stamp = clock.now().to_msg()
+    t.header.frame_id = parent_frame
+    t.child_frame_id = child_frame
+
+    t.transform.translation.x = position[0]
+    t.transform.translation.y = position[1]
+    t.transform.translation.z = position[2]
+
+    t.transform.rotation.x = orientation[0]
+    t.transform.rotation.y = orientation[1]
+    t.transform.rotation.z = orientation[2]
+    t.transform.rotation.w = orientation[3]
+
+    tf_broadcaster.sendTransform(t)
+
 
 #########################################################
 # ROS 2 PUBLISHER FUNCTIONS
@@ -240,6 +308,9 @@ def bridge(sid, data):
     global throttle_command, steering_command
     global throttle_command2, steering_command2
 
+    global latest_position_1, latest_orientation_1
+    global latest_position_2, latest_orientation_2
+
     # Get package's shared directory path
     package_share_directory = get_package_share_directory('autodrive_f1tenth')
 
@@ -272,10 +343,13 @@ def bridge(sid, data):
         
         # IPS
         position = np.fromstring(data["V1 Position"], dtype=float, sep=' ')
+        latest_position_1     = position
         publish_ips_data(position)
         
         # IMU
         orientation_quaternion = np.fromstring(data["V1 Orientation Quaternion"], dtype=float, sep=' ')
+        latest_orientation_1  = orientation_quaternion
+
         angular_velocity = np.fromstring(data["V1 Angular Velocity"], dtype=float, sep=' ')
         linear_acceleration = np.fromstring(data["V1 Linear Acceleration"], dtype=float, sep=' ')
         publish_imu_data(orientation_quaternion, angular_velocity, linear_acceleration)
@@ -286,7 +360,7 @@ def bridge(sid, data):
         broadcast_transform("right_encoder_1", "f1tenth_1", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles[1]%6.283, 0.0))
         broadcast_transform("ips_1", "f1tenth_1", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
         broadcast_transform("imu_1", "f1tenth_1", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
-        broadcast_transform("lidar_1", "f1tenth_1", np.asarray([0.2733, 0.0, 0.096]), np.asarray([0.0, 0.0, 0.0, 1.0]))
+        
         broadcast_transform("front_camera_1", "f1tenth_1", np.asarray([-0.015, 0.0, 0.15]), np.asarray([0, 0.0871557, 0, 0.9961947]))
         broadcast_transform("front_left_wheel_1", "f1tenth_1", np.asarray([0.33, 0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering))/(2*0.141537-2*0.0765*np.tan(steering)))))
         broadcast_transform("front_right_wheel_1", "f1tenth_1", np.asarray([0.33, -0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering))/(2*0.141537+2*0.0765*np.tan(steering)))))
@@ -296,20 +370,26 @@ def bridge(sid, data):
         # LIDAR for Vehicle 1
         try:
             lidar_scan_rate = float(data["V1 LIDAR Scan Rate"])
-            lidar_range_array = np.fromstring(data["V1 LIDAR Range Array"], dtype=float, sep=' ')
-            
-            # Handle intensity array with proper fallback
+
+            # 1️⃣  DECOMPRESS the range array coming from Unity
+            lidar_range_array = decompress_lidar_data(data["V1 LIDAR Range Array"])
+
+            # 2️⃣  DECOMPRESS the intensity array (or fall back to ones)
             if "V1 LIDAR Intensity Array" in data and data["V1 LIDAR Intensity Array"].strip():
-                lidar_intensity_array = np.fromstring(data["V1 LIDAR Intensity Array"], dtype=float, sep=' ')
+                lidar_intensity_array = decompress_lidar_data(data["V1 LIDAR Intensity Array"])
             else:
                 lidar_intensity_array = np.ones_like(lidar_range_array)
-            
-            # Ensure arrays have same length
+
+            # (length-mismatch safeguard stays the same)
             if len(lidar_intensity_array) != len(lidar_range_array):
                 lidar_intensity_array = np.ones_like(lidar_range_array)
-            
-            print(f"V1 LIDAR: Rate={lidar_scan_rate}, Points={len(lidar_range_array)}, Intensities={len(lidar_intensity_array)}")
+
+            print(f"V1 LIDAR: Rate={lidar_scan_rate}, "
+                f"Points={len(lidar_range_array)}, Intensities={len(lidar_intensity_array)}")
+
+            broadcast_transform("lidar_1", "f1tenth_1", np.asarray([0.2733, 0.0, 0.096]), np.asarray([0.0, 0.0, 0.0, 1.0]))
             publish_lidar_scan(lidar_scan_rate, lidar_range_array, lidar_intensity_array)
+
         except Exception as e:
             print(f"Error processing V1 LIDAR data: {e}")
         
@@ -331,10 +411,13 @@ def bridge(sid, data):
         
         # IPS
         position2 = np.fromstring(data["V2 Position"], dtype=float, sep=' ')
+        latest_position_2 = position2
         publish_ips_data_v2(position2)
 
         # IMU
         orientation_quaternion2 = np.fromstring(data["V2 Orientation Quaternion"], dtype=float, sep=' ')
+        latest_orientation_2  = orientation_quaternion2
+
         angular_velocity2 = np.fromstring(data["V2 Angular Velocity"], dtype=float, sep=' ')
         linear_acceleration2 = np.fromstring(data["V2 Linear Acceleration"], dtype=float, sep=' ')
         publish_imu_data_v2(orientation_quaternion2, angular_velocity2, linear_acceleration2)
@@ -345,7 +428,7 @@ def bridge(sid, data):
         broadcast_transform("right_encoder_2", "f1tenth_2", np.asarray([0.0, -0.118, 0.0]), quaternion_from_euler(0.0, 120*encoder_angles2[1]%6.283, 0.0))
         broadcast_transform("ips_2", "f1tenth_2", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
         broadcast_transform("imu_2", "f1tenth_2", np.asarray([0.08, 0.0, 0.055]), np.asarray([0.0, 0.0, 0.0, 1.0]))
-        broadcast_transform("lidar_2", "f1tenth_2", np.asarray([0.2733, 0.0, 0.096]), np.asarray([0.0, 0.0, 0.0, 1.0]))
+        
         broadcast_transform("front_camera_2", "f1tenth_2", np.asarray([-0.015, 0.0, 0.15]), np.asarray([0, 0.0871557, 0, 0.9961947]))
         broadcast_transform("front_left_wheel_2", "f1tenth_2", np.asarray([0.33, 0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering2))/(2*0.141537-2*0.0765*np.tan(steering2)))))
         broadcast_transform("front_right_wheel_2", "f1tenth_2", np.asarray([0.33, -0.118, 0.0]), quaternion_from_euler(0.0, 0.0, np.arctan((2*0.141537*np.tan(steering2))/(2*0.141537+2*0.0765*np.tan(steering2)))))
@@ -355,22 +438,26 @@ def bridge(sid, data):
         # LIDAR for Vehicle 2
         try:
             lidar_scan_rate2 = float(data["V2 LIDAR Scan Rate"])
-            lidar_range_array2 = np.fromstring(data["V2 LIDAR Range Array"], dtype=float, sep=' ')
-            
-            # Handle intensity array with proper fallback
+
+            lidar_range_array2 = decompress_lidar_data(data["V2 LIDAR Range Array"])
+
             if "V2 LIDAR Intensity Array" in data and data["V2 LIDAR Intensity Array"].strip():
-                lidar_intensity_array2 = np.fromstring(data["V2 LIDAR Intensity Array"], dtype=float, sep=' ')
+                lidar_intensity_array2 = decompress_lidar_data(data["V2 LIDAR Intensity Array"])
             else:
                 lidar_intensity_array2 = np.ones_like(lidar_range_array2)
-            
-            # Ensure arrays have same length
+
             if len(lidar_intensity_array2) != len(lidar_range_array2):
                 lidar_intensity_array2 = np.ones_like(lidar_range_array2)
 
-            print(f"V2 LIDAR: Rate={lidar_scan_rate2}, Points={len(lidar_range_array2)}, Intensities={len(lidar_intensity_array2)}")
+            print(f"V2 LIDAR: Rate={lidar_scan_rate2}, "
+                f"Points={len(lidar_range_array2)}, Intensities={len(lidar_intensity_array2)}")
+
+            broadcast_transform("lidar_2", "f1tenth_2", np.asarray([0.2733, 0.0, 0.096]), np.asarray([0.0, 0.0, 0.0, 1.0]))
             publish_lidar_scan_v2(lidar_scan_rate2, lidar_range_array2, lidar_intensity_array2)
+
         except Exception as e:
             print(f"Error processing V2 LIDAR data: {e}")
+
 
         # Cameras for Vehicle 2
         front_camera_image2 = np.asarray(Image.open(BytesIO(base64.b64decode(data["V2 Front Camera Image"]))))
@@ -397,10 +484,16 @@ def main():
     # Global declarations
     global autodrive_incoming_bridge, cv_bridge, publishers
     global throttle_command, steering_command
+    global tf_broadcaster
 
     # ROS 2 infrastructure
     rclpy.init() # Initialize ROS 2 communication for this context
     autodrive_incoming_bridge = rclpy.create_node('autodrive_incoming_bridge') # Create ROS 2 node
+
+    ##global broadcaster
+    tf_broadcaster = tf2_ros.TransformBroadcaster(autodrive_incoming_bridge)
+
+
     qos_profile = QoSProfile( # Quality of Service profile
         reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE, # Reliable (not best effort) communication
         history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST, # Keep/store only up to last N samples
@@ -424,6 +517,17 @@ def main():
     # Recursive operations while node is alive
     while rclpy.ok():
         rclpy.spin_once(autodrive_incoming_bridge, timeout_sec=0.01) # Spin the node once with timeout
+        # Re-broadcast TF every loop to keep RViz happy
+
+        if latest_position_1 is not None and latest_orientation_1 is not None:
+            print(f"[DBG] V1 pose {latest_position_1[:2]} "f"θ={latest_orientation_1[2]:.3f}")
+            #broadcast_transform("f1tenth_1", "map", latest_position_1, latest_orientation_1)
+            broadcast_tf(tf_broadcaster, "map", "f1tenth_1/base_link", latest_position_1, latest_orientation_1, autodrive_incoming_bridge.get_clock())
+        if latest_position_2 is not None and latest_orientation_2 is not None:
+            print(f"[DBG] V2 pose {latest_position_2[:2]} "f"θ={latest_orientation_2[2]:.3f}")
+            #broadcast_transform("f1tenth_2", "map", latest_position_2, latest_orientation_2)
+            broadcast_tf(tf_broadcaster, "map", "f1tenth_2/base_link", latest_position_2, latest_orientation_2, autodrive_incoming_bridge.get_clock())
+
     
     autodrive_incoming_bridge.destroy_node() # Explicitly destroy the node
     rclpy.shutdown() # Shutdown this context
