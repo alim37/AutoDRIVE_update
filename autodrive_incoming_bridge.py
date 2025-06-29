@@ -273,7 +273,7 @@ def connect(sid, environ):
 @sio.on('Bridge')
 def bridge(sid, data):
     print("🔵 Bridge event received") # Suppressed for cleaner output
-    print("🔍 Incoming data keys:", list(data.keys())) # Suppressed for cleaner output
+    #print("🔍 Incoming data keys:", list(data.keys())) # Suppressed for cleaner output
 
     # Global declarations
     global autodrive_incoming_bridge, cv_bridge, publishers
@@ -437,7 +437,8 @@ def bridge(sid, data):
         # Vehicle control commands
         # print(f"EMIT: V1 → T:{throttle_command}, S:{steering_command} | V2 → T:{throttle_command2}, S:{steering_command2}") # Suppressed for cleaner output
 
-        sio.emit('Bridge', data={
+        #changed from 'Bridge'
+        sio.emit('VehicleControl', data={
             'V1 Throttle': str(throttle_command if throttle_command is not None else 0.0),
             'V1 Steering': str(steering_command if steering_command is not None else 0.0),
             'V2 Throttle': str(throttle_command2 if throttle_command2 is not None else 0.0),
